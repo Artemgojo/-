@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Башенная Рыбёха: Немо (Конструктор)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bubblegum+Sans&display=swap');
+        body {
+            font-family: 'Bubblegum Sans', cursive, sans-serif;
+            touch-action: none;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Settings Modal */
+        #settingsModal {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+        }
+        
+        /* Joystick Styles */
+        #joystickContainer {
+            position: absolute;
+            bottom: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 140px;
+            height: 140px;
+            z-index: 40;
+            display: none;
+        }
+        
+        #joystickBase {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            position: relative;
+            backdrop-filter: blur(2px);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        
+        #joystickKnob {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(200,200,200,0.8));
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            border: 2px solid white;
+        }
+
+        /* Progress Bar */
+        #progressContainer {
+            width: 300px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            overflow: hidden;
+            position: relative;
+            margin-top: 5px;
+        }
+        
+        #progressBar {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            width: 0%;
+            transition: width 0.3s ease-out;
+            box-shadow: 0 0 10px #4ade80;
+        }
+
+        /* Rainbow Text Animation */
+        .rainbow-text {
+            background: linear-gradient(to right, #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: rainbow 2s linear infinite;
+            background-size: 200% auto;
+        }
+
+        @keyframes rainbow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        .unicorn-mode {
+            box-shadow: inset 0 0 50px rgba(255, 0, 255, 0.3);
+        }
+        
+        .booster-timer {
+            animation: pulse 1s infinite;
+        }
+
+        /* Editor Styles */
+        .tool-btn {
+            transition: all 0.1s;
+        }
+        .tool-btn.active {
+            transform: scale(1.1);
+            border-color: #fbbf24;
+            box-shadow: 0 0 10px #fbbf24;
+        }
+        .grid-lines {
+            background-size: 50px 50px;
+            background-image:
+                linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+        }
+        
+        /* Landscape Scroll Fix */
+        @media (orientation: landscape) and (max-height: 500px) {
+            #startScreen {
+                justify-content: flex-start;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                display: flex;
+                flex-wrap: wrap;
+                flex-direction: row;
+                align-content: flex-start;
+            }
+            #startScreen > h1 {
+                width: 100%;
+                font-size: 2.5rem;
+                margin-bottom: 0.5rem;
+                flex-shrink: 0;
+            }
+            /* Wrap controls to save vertical space */
+            .landscape-row {
+                flex-direction: row !important;
+                align-items: flex-start !important;
+                gap: 1rem !important;
+            }
+            /* Hide non-essential elements if space is tight */
+            .control-hint {
+                display: none;
+            }
+            /* Scale buttons down */
+            .main-btn {
+                padding: 0.5rem 1.5rem !important;
+                font-size: 1rem !important;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative select-none transition-colors duration-1000">
+
+    <!-- Bubbles Background Animation -->
+    <div id="bubbles" class="absolute inset-0 pointer-events-none overflow-hidden z-0"></div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas" class="block w-full h-full absolute inset-0 z-10 cursor-none"></canvas>
+
+    <!-- Editor Grid (only visible in editor) -->
+    <div id="editorGrid" class="absolute inset-0 z-0 pointer-events-none hidden grid-lines"></div>
+
+    <!-- Joystick UI -->
+    <div id="joystickContainer">
+        <div id="joystickBase">
+            <div id="joystickKnob"></div>
+        </div>
+    </div>
+
+    <!-- UI Layer -->
+    <div id="uiLayer" class="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-4">
+        <!-- Top Stats -->
+        <div class="flex flex-col items-center w-full">
+            <div class="flex justify-between items-start w-full max-w-5xl px-4 mt-2">
+                <div class="text-white drop-shadow-md text-2xl flex flex-col">
+                    <div>СЧЕТ: <span id="scoreDisplay" class="font-bold text-yellow-300">0</span></div>
+                    
+                    <!-- Active Boosters UI -->
+                    <div id="boostersContainer" class="flex gap-2 mt-2 text-sm font-bold">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+                
+                <!-- Growth Progress -->
+                <div id="progressSection" class="flex flex-col items-center pointer-events-auto">
+                    <div class="text-white text-sm drop-shadow-md mb-1 font-bold tracking-wider">РОСТ ДО СЛЕДУЮЩЕГО УРОВНЯ</div>
+                    <div id="progressContainer">
+                        <div id="progressBar"></div>
+                    </div>
+                    <div id="unicornText" class="hidden rainbow-text font-black text-2xl mt-1 tracking-widest drop-shadow-sm">🦄 РЕЖИМ ЕДИНОРОГА! 🦄</div>
+                </div>
+
+                <div class="text-white drop-shadow-md text-xl text-right">
+                    <div>РАЗМЕР: <span id="sizeDisplay" class="font-bold text-green-300">XS</span></div>
+                    <div class="text-sm opacity-80 mt-1">Рекорд: <span id="bestScoreDisplay" class="text-yellow-400">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning Layer -->
+        <div id="warningLayer" class="absolute inset-0 flex items-center justify-center pointer-events-none hidden">
+             <div class="text-red-600 font-black text-6xl animate-ping opacity-75">⚠️ АКУЛА! ⚠️</div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="absolute inset-0 z-50 flex items-center justify-center hidden">
+        <div class="bg-gray-900/95 p-6 rounded-2xl border-2 border-gray-500 shadow-2xl w-80 backdrop-blur-xl">
+            <h2 class="text-2xl text-white font-bold mb-6 text-center tracking-widest">НАСТРОЙКИ</h2>
+            
+            <div class="mb-6">
+                <p class="text-gray-400 text-xs uppercase font-bold mb-2">Сложность</p>
+                <div class="flex gap-2">
+                    <button class="diff-btn flex-1 py-2 rounded-lg font-bold text-sm transition-all active:scale-95" data-diff="0">ЛЕГКО</button>
+                    <button class="diff-btn flex-1 py-2 rounded-lg font-bold text-sm transition-all active:scale-95" data-diff="1">НОРМ</button>
+                    <button class="diff-btn flex-1 py-2 rounded-lg font-bold text-sm transition-all active:scale-95" data-diff="2">СЛОЖНО</button>
+                </div>
+            </div>
+
+            <div class="mb-8 flex items-center justify-between">
+                <p class="text-gray-400 text-xs uppercase font-bold">Музыка</p>
+                <button id="musicToggle" class="w-14 h-8 bg-red-500 rounded-full relative transition-colors shadow-inner">
+                    <div class="w-6 h-6 bg-white rounded-full absolute top-1 left-1 shadow-md transition-transform duration-300"></div>
+                </button>
+            </div>
+
+            <button id="closeSettingsBtn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl border-b-4 border-blue-800 active:border-b-0 active:translate-y-1 transition-all">
+                ЗАКРЫТЬ
+            </button>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="absolute z-30 inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm transition-opacity duration-300 overflow-y-auto py-4 px-2 no-scrollbar">
+        <button id="settingsBtn" class="fixed top-4 left-4 bg-gray-800/50 hover:bg-gray-700 text-white p-2 md:p-3 rounded-xl backdrop-blur border border-gray-500 shadow-lg active:scale-95 transition-all z-50 pointer-events-auto" title="Настройки">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        </button>
+        <button id="fullscreenBtn" class="fixed top-4 right-4 bg-gray-800/50 hover:bg-gray-700 text-white p-2 md:p-3 rounded-xl backdrop-blur border border-gray-500 shadow-lg active:scale-95 transition-all z-50 pointer-events-auto" title="На весь экран">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+        </button>
+        <h1 class="text-4xl md:text-6xl text-orange-400 drop-shadow-[0_4px_0_rgba(0,0,0,1)] text-center mb-2 animate-bounce font-black tracking-wider shrink-0">РЫБЁХА<br><span class="text-white text-2xl md:text-4xl">НЕМО</span></h1>
+        
+        <!-- Changed md:flex-row to sm:flex-row for better horizontal mobile support -->
+        <div class="flex flex-col sm:flex-row gap-2 md:gap-4 mb-4 items-center shrink-0">
+            <!-- Skin Selector -->
+            <div class="bg-blue-900/80 p-3 md:p-4 rounded-xl border border-blue-400 w-64 md:w-80 text-center shadow-2xl shrink-0">
+                <p class="text-blue-200 text-xs mb-1 uppercase tracking-widest font-bold">Скин</p>
+                <div class="flex items-center justify-between px-2">
+                    <button id="prevSkinBtn" class="bg-blue-700 hover:bg-blue-600 text-white w-8 h-8 rounded-full font-bold">❮</button>
+                    <div class="flex flex-col items-center">
+                        <div class="w-16 h-16 md:w-20 md:h-20 relative flex items-center justify-center">
+                            <canvas id="skinCanvas" width="80" height="80"></canvas>
+                            <div id="lockIcon" class="absolute inset-0 flex items-center justify-center text-4xl hidden">🔒</div>
+                        </div>
+                        <div id="skinName" class="text-lg font-bold text-white leading-none">Немо</div>
+                        <div id="skinUnlockText" class="text-[10px] text-yellow-400 h-3 leading-none mt-1"></div>
+                        <input type="color" id="customSkinColor" class="mt-2 w-16 h-8 rounded cursor-pointer hidden border-2 border-white/50" value="#ff0000">
+                    </div>
+                    <button id="nextSkinBtn" class="bg-blue-700 hover:bg-blue-600 text-white w-8 h-8 rounded-full font-bold">❯</button>
+                </div>
+            </div>
+
+            <!-- Map Selector -->
+            <div class="bg-indigo-900/80 p-3 md:p-4 rounded-xl border border-indigo-400 w-64 md:w-80 text-center shadow-2xl shrink-0">
+                <p class="text-indigo-200 text-xs mb-1 uppercase tracking-widest font-bold">Карта</p>
+                <div class="flex items-center justify-between px-2">
+                    <button id="prevMapBtn" class="bg-indigo-700 hover:bg-indigo-600 text-white w-8 h-8 rounded-full font-bold">❮</button>
+                    <div class="flex flex-col items-center">
+                        <div id="mapPreview" class="w-16 h-16 md:w-20 md:h-20 rounded-full border-4 border-white mb-1 bg-blue-500 shadow-inner"></div>
+                        <div id="mapName" class="text-lg font-bold text-white leading-none">Океан</div>
+                    </div>
+                    <button id="nextMapBtn" class="bg-indigo-700 hover:bg-indigo-600 text-white w-8 h-8 rounded-full font-bold">❯</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Selector -->
+        <div class="bg-gray-800/80 p-3 rounded-xl border border-gray-500 mb-4 w-64 md:w-80 text-center shrink-0">
+            <p class="text-white mb-2 text-sm">Управление:</p>
+            <div class="flex gap-4 justify-center">
+                <button id="modeFollow" class="flex-1 py-1 px-2 bg-green-500 hover:bg-green-400 rounded-lg text-white font-bold border-b-4 border-green-700 active:border-b-0 active:translate-y-1 transition-all ring-4 ring-yellow-400 text-xs md:text-sm">
+                    👆 Палец
+                </button>
+                <button id="modeJoystick" class="flex-1 py-1 px-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-white font-bold border-b-4 border-gray-800 active:border-b-0 active:translate-y-1 transition-all text-xs md:text-sm">
+                    🕹️ Джойстик
+                </button>
+            </div>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row gap-4 shrink-0">
+             <button id="constructorBtn" class="bg-purple-500 hover:bg-purple-600 text-white text-lg md:text-xl py-2 px-6 md:py-3 md:px-8 rounded-full border-b-4 md:border-b-8 border-purple-700 active:border-b-0 active:translate-y-2 transition-all shadow-xl font-bold cursor-pointer pointer-events-auto hover:scale-105">
+                🛠️ КОНСТРУКТОР
+            </button>
+            <button id="startBtn" class="bg-orange-500 hover:bg-orange-600 text-white text-lg md:text-xl py-2 px-8 md:py-3 md:px-12 rounded-full border-b-4 md:border-b-8 border-orange-700 active:border-b-0 active:translate-y-2 transition-all shadow-xl font-bold cursor-pointer pointer-events-auto hover:scale-105 animate-pulse">
+                ПЛЫТЬ!
+            </button>
+        </div>
+    </div>
+
+    <!-- Editor UI -->
+    <div id="editorUI" class="absolute inset-0 z-40 hidden flex-col justify-between pointer-events-none">
+        <!-- Editor Top Bar -->
+        <div class="w-full bg-black/60 p-2 flex flex-col md:flex-row justify-between items-center pointer-events-auto backdrop-blur-md gap-2">
+            <div class="text-white font-bold text-sm md:text-xl">🛠️ КОНСТРУКТОР</div>
+            <div class="flex gap-2">
+                <div class="flex gap-2">
+                <button id="editorClearBtn" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded font-bold text-xs md:text-sm">Очистить</button>
+                <button id="editorPlayBtn" class="bg-green-500 hover:bg-green-400 text-white px-4 py-1 rounded font-bold border-b-2 md:border-b-4 border-green-700 active:border-b-0 active:translate-y-1 text-xs md:text-sm">▶️ ТЕСТ</button>
+                <button id="editorExitBtn" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded font-bold text-xs md:text-sm">Меню</button>
+            </div>
+            </div>
+        </div>
+
+        <!-- Editor Toolbar -->
+        <!-- Added shrink-0 to all tool items to ensure horizontal scrolling works properly -->
+        <div class="w-full bg-black/80 p-2 md:p-4 flex justify-start md:justify-center gap-2 md:gap-4 overflow-x-auto pointer-events-auto backdrop-blur-md no-scrollbar">
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-10 h-10 md:w-12 md:h-12 bg-blue-500 rounded-lg border-2 border-white mb-1 flex items-center justify-center text-xl md:text-2xl" data-tool="start">🚩</button>
+                <span class="text-white text-[10px]">Старт</span>
+            </div>
+            <div class="w-px bg-gray-600 mx-2 shrink-0"></div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-gray-700 rounded-lg border-2 border-gray-400 mb-1 flex items-center justify-center text-xl" data-tool="rock">🪨</button>
+                <span class="text-white text-[10px]">Камень</span>
+            </div>
+            <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-pink-700 rounded-lg border-2 border-pink-400 mb-1 flex items-center justify-center text-xl" data-tool="coral">🪸</button>
+                <span class="text-white text-[10px]">Коралл</span>
+            </div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-green-700 rounded-lg border-2 border-green-400 mb-1 flex items-center justify-center text-xl" data-tool="seaweed">🌿</button>
+                <span class="text-white text-[10px]">Трава</span>
+            </div>
+            <div class="w-px bg-gray-600 mx-2 shrink-0"></div>
+            <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-orange-400 rounded-lg border-2 border-orange-200 mb-1 flex items-center justify-center text-lg" data-tool="enemy_s">🐟</button>
+                <span class="text-white text-[10px]">Мелкая</span>
+            </div>
+            <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-red-500 rounded-lg border-2 border-red-300 mb-1 flex items-center justify-center text-2xl" data-tool="enemy_m">🐠</button>
+                <span class="text-white text-[10px]">Средняя</span>
+            </div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-purple-600 rounded-lg border-2 border-purple-400 mb-1 flex items-center justify-center text-3xl" data-tool="enemy_l">🐋</button>
+                <span class="text-white text-[10px]">Крупная</span>
+            </div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-slate-600 rounded-lg border-2 border-slate-400 mb-1 flex items-center justify-center text-3xl" data-tool="shark">🦈</button>
+                <span class="text-white text-[10px]">Акула</span>
+            </div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-black rounded-lg border-2 border-red-600 mb-1 flex items-center justify-center text-xl" data-tool="bomb">💣</button>
+                <span class="text-white text-[10px]">Бомба</span>
+            </div>
+             <div class="w-px bg-gray-600 mx-2 shrink-0"></div>
+              <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-green-400 rounded-lg border-2 border-green-200 mb-1 flex items-center justify-center text-lg font-bold text-black" data-tool="boost_grow">2x</button>
+                <span class="text-white text-[10px]">Рост</span>
+            </div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-purple-300 rounded-lg border-2 border-purple-100 mb-1 flex items-center justify-center text-xl" data-tool="boost_uni">🦄</button>
+                <span class="text-white text-[10px]">Единорог</span>
+            </div>
+             <div class="w-px bg-gray-600 mx-2 shrink-0"></div>
+             <div class="flex flex-col items-center shrink-0">
+                <button class="tool-btn w-12 h-12 bg-white rounded-lg border-2 border-gray-400 mb-1 flex items-center justify-center text-2xl" data-tool="eraser">❌</button>
+                <span class="text-white text-[10px]">Ластик</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="hidden absolute z-30 inset-0 flex flex-col items-center justify-center bg-red-900/80 backdrop-blur-md transition-opacity duration-300 p-4">
+        <h2 class="text-4xl md:text-6xl text-red-500 drop-shadow-[0_4px_0_#fff] mb-4 md:mb-6 font-black tracking-widest text-center">СЪЕЛИ!</h2>
+        
+        <div class="flex flex-col md:flex-row gap-4 md:gap-6 mb-6 md:mb-8">
+            <div class="bg-white/90 p-4 md:p-6 rounded-2xl shadow-2xl text-center border-4 border-red-500 transform -rotate-3 w-32 md:w-40">
+                <p class="text-gray-600 text-[10px] md:text-xs uppercase font-bold tracking-wider">Счет</p>
+                <p id="finalScore" class="text-2xl md:text-4xl font-black text-blue-800">0</p>
+            </div>
+            <div class="bg-yellow-100/90 p-4 md:p-6 rounded-2xl shadow-2xl text-center border-4 border-yellow-500 transform rotate-3 w-32 md:w-40">
+                <p class="text-gray-600 text-[10px] md:text-xs uppercase font-bold tracking-wider">Рекорд</p>
+                <p id="finalBestScore" class="text-2xl md:text-4xl font-black text-orange-600">0</p>
+            </div>
+        </div>
+
+        <button id="restartBtn" class="bg-green-500 hover:bg-green-600 text-white text-lg md:text-2xl py-3 px-12 md:py-4 md:px-16 rounded-full border-b-4 md:border-b-8 border-green-700 active:border-b-0 active:translate-y-2 transition-all shadow-xl font-bold cursor-pointer pointer-events-auto hover:scale-105">
+            ЗАНОВО
+        </button>
+         <button id="menuBtn" class="mt-4 bg-blue-500 hover:bg-blue-600 text-white text-lg md:text-xl py-2 px-8 rounded-full border-b-4 border-blue-700 active:border-b-0 active:translate-y-1 transition-all shadow-lg font-bold cursor-pointer pointer-events-auto">
+            В МЕНЮ
+        </button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const editorUI = document.getElementById('editorUI');
+        const editorGrid = document.getElementById('editorGrid');
+        
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const bestScoreDisplay = document.getElementById('bestScoreDisplay');
+        const sizeDisplay = document.getElementById('sizeDisplay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const finalBestScoreDisplay = document.getElementById('finalBestScore');
+        
+        const startBtn = document.getElementById('startBtn');
+        const constructorBtn = document.getElementById('constructorBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const menuBtn = document.getElementById('menuBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        
+        // Editor Buttons
+        const editorClearBtn = document.getElementById('editorClearBtn');
+        const editorPlayBtn = document.getElementById('editorPlayBtn');
+        const editorExitBtn = document.getElementById('editorExitBtn');
+        const toolBtns = document.querySelectorAll('.tool-btn');
+        
+        const progressBar = document.getElementById('progressBar');
+        const progressSection = document.getElementById('progressSection');
+        const warningLayer = document.getElementById('warningLayer');
+        const unicornText = document.getElementById('unicornText');
+        const boostersContainer = document.getElementById('boostersContainer');
+        const body = document.body;
+
+        // UI References
+        const skinCanvas = document.getElementById('skinCanvas');
+        const skinCtx = skinCanvas.getContext('2d');
+        const prevSkinBtn = document.getElementById('prevSkinBtn');
+        const nextSkinBtn = document.getElementById('nextSkinBtn');
+        const skinNameEl = document.getElementById('skinName');
+        const skinUnlockEl = document.getElementById('skinUnlockText');
+        const lockIcon = document.getElementById('lockIcon');
+        const customSkinColor = document.getElementById('customSkinColor');
+
+        // Settings UI
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const musicToggle = document.getElementById('musicToggle');
+        const diffBtns = document.querySelectorAll('.diff-btn');
+
+        // Map UI
+        const prevMapBtn = document.getElementById('prevMapBtn');
+        const nextMapBtn = document.getElementById('nextMapBtn');
+        const mapNameEl = document.getElementById('mapName');
+        const mapPreviewEl = document.getElementById('mapPreview');
+
+        // Controls UI
+        const modeFollowBtn = document.getElementById('modeFollow');
+        const modeJoystickBtn = document.getElementById('modeJoystick');
+        const joystickContainer = document.getElementById('joystickContainer');
+        const joystickBase = document.getElementById('joystickBase');
+        const joystickKnob = document.getElementById('joystickKnob');
+
+        // Game State
+        let gameState = 'START'; // START, PLAYING, GAMEOVER, EDITOR, PLAY_CUSTOM
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('nemoHighScore')) || 0;
+        let animationId;
+        let lastTime = 0;
+        let gameTime = 0;
+        let controlMode = 'FOLLOW';
+
+        // Settings State
+        const settings = {
+            difficulty: 1, // 0: Easy, 1: Normal, 2: Hard
+            music: false
+        };
+        let audioContext = null;
+        let bgOscillators = [];
+        
+        bestScoreDisplay.innerText = highScore;
+
+        // Maps Config
+        const maps = [
+            { id: 'ocean', name: 'Океан', bgStart: '#67e8f9', bgEnd: '#1e3a8a', sand: '#e6c896', rock: '#4b5563' },
+            { id: 'midnight', name: 'Полночь', bgStart: '#312e81', bgEnd: '#000000', sand: '#1f2937', rock: '#111827' },
+            { id: 'swamp', name: 'Болото', bgStart: '#84cc16', bgEnd: '#14532d', sand: '#3f6212', rock: '#1c1917' },
+            { id: 'blood', name: 'Алая Лагуна', bgStart: '#f87171', bgEnd: '#7f1d1d', sand: '#450a0a', rock: '#292524' }
+        ];
+        let currentMapIndex = 0;
+
+        // Skins Config
+        const skins = [
+            { id: 'nemo', name: 'Немо', color1: '#FF6B26', color2: 'white', detail: '#E65100', unlockScore: 0 },
+            { id: 'dory', name: 'Дори', color1: '#1E40AF', color2: '#111827', detail: '#FACC15', unlockScore: 500 },
+            { id: 'gold', name: 'Золотой', color1: '#FACC15', color2: '#FEF08A', detail: '#CA8A04', unlockScore: 1500 },
+            { id: 'shark', name: 'Акулёнок', color1: '#9CA3AF', color2: '#F3F4F6', detail: '#4B5563', unlockScore: 3000 },
+            { id: 'void', name: 'Бездна', color1: '#4C1D95', color2: '#C4B5FD', detail: '#EC4899', unlockScore: 5000 },
+            { id: 'rainbow', name: 'Радуга', color1: 'rainbow', color2: 'white', detail: 'white', unlockScore: 10000 },
+            { id: 'custom', name: 'Свой Стиль', color1: 'custom', color2: 'white', detail: 'rgba(0,0,0,0.2)', unlockScore: 0 }
+        ];
+        let currentSkinIndex = 0;
+
+        // Size Levels
+        const sizeLevels = [
+            { r: 15, label: 'XS' },
+            { r: 25, label: 'S' },
+            { r: 40, label: 'M' },
+            { r: 60, label: 'L' },
+            { r: 90, label: 'XL' },
+            { r: 130, label: 'KAIJU' },
+            { r: 9999, label: 'GOD' }
+        ];
+
+        // Editor State
+        let selectedTool = 'start';
+        let customLevel = JSON.parse(localStorage.getItem('nemoCustomLevel')) || {
+            start: { x: window.innerWidth/2, y: window.innerHeight/2 },
+            decorations: [],
+            enemies: [],
+            bombs: [],
+            sharks: [],
+            boosters: []
+        };
+        // Normalize loaded level if needed
+        if(!customLevel.decorations) customLevel.decorations = [];
+        if(!customLevel.start) customLevel.start = {x: 300, y: 300};
+
+        // Resize
+        let width, height;
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            if(gameState === 'START') generateDecorations();
+        }
+        window.addEventListener('resize', resize);
+        
+        // --- Landscape & Decorations ---
+        let decorations = [];
+        
+        function generateDecorations() {
+            decorations = [];
+            const map = maps[currentMapIndex];
+            const numberOfItems = Math.floor(width / 30);
+            
+            // Sand particles (visual only)
+            for(let i=0; i<width/10; i++) {
+                decorations.push({
+                    type: 'sand',
+                    x: Math.random() * width,
+                    y: height - 10 - Math.random() * 80,
+                    size: Math.random() * 3 + 1,
+                    color: map.sand
+                });
+            }
+
+            for (let i = 0; i < numberOfItems; i++) {
+                const typeRand = Math.random();
+                const x = (width / numberOfItems) * i + (Math.random() * 20 - 10);
+                const y = height; 
+                
+                if (typeRand < 0.4) {
+                    decorations.push({
+                        type: 'seaweed',
+                        x: x,
+                        y: y,
+                        height: 60 + Math.random() * 120,
+                        width: 10 + Math.random() * 10,
+                        segments: 5 + Math.floor(Math.random() * 5),
+                        color: `hsl(${Math.random() * 60 + (currentMapIndex * 90)}, 60%, ${30 + Math.random() * 20}%)`,
+                        offset: Math.random() * Math.PI * 2
+                    });
+                } else if (typeRand < 0.75) {
+                    decorations.push({
+                        type: 'rock',
+                        x: x,
+                        y: y,
+                        w: 20 + Math.random() * 60,
+                        h: 15 + Math.random() * 40,
+                        color: map.rock
+                    });
+                } else {
+                    decorations.push({
+                        type: 'coral',
+                        x: x,
+                        y: y,
+                        size: 25 + Math.random() * 45,
+                        branches: 3 + Math.floor(Math.random() * 5),
+                        color: `hsl(${Math.random() * 360}, 70%, 60%)`
+                    });
+                }
+            }
+        }
+
+        function drawDecorations(list, time) {
+            const map = maps[currentMapIndex];
+
+            // Floor Gradient
+            const gradient = ctx.createLinearGradient(0, height, 0, height - 150);
+            gradient.addColorStop(0, map.sand); 
+            gradient.addColorStop(1, 'transparent');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, height - 150, width, 150);
+
+            // Draw decorations
+            list.forEach(d => {
+                if (d.type === 'sand') {
+                    ctx.fillStyle = d.color;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath();
+                    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                } else if (d.type === 'rock') {
+                    ctx.fillStyle = d.color || map.rock;
+                    ctx.beginPath();
+                    ctx.ellipse(d.x, d.y - d.h * 0.2, d.w/2, d.h/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (d.type === 'coral') {
+                    ctx.lineCap = 'round';
+                    ctx.strokeStyle = d.color;
+                    for(let b=0; b<d.branches; b++) {
+                        let angle = -Math.PI/2 + (b - d.branches/2) * 0.6;
+                        let len = d.size * (0.8 + Math.random()*0.2); 
+                        let sway = Math.sin(time * 0.001 + d.x) * 5;
+                        ctx.lineWidth = 6;
+                        ctx.beginPath();
+                        ctx.moveTo(d.x, d.y);
+                        ctx.quadraticCurveTo(d.x + sway, d.y - len/2, d.x + Math.cos(angle)*len + sway, d.y + Math.sin(angle)*len);
+                        ctx.stroke();
+                    }
+                } else if (d.type === 'seaweed') {
+                    ctx.strokeStyle = d.color;
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(d.x, d.y);
+                    let wave = Math.sin(time * 0.002 + d.offset) * 20;
+                    ctx.quadraticCurveTo(d.x + wave, d.y - d.height/2, d.x + wave/2, d.y - d.height);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        // --- Input System ---
+        const mouse = { x: width / 2, y: height / 2 };
+        const joystick = { active: false, x: 0, y: 0, dx: 0, dy: 0 };
+
+        function setupControls() {
+            modeFollowBtn.addEventListener('click', () => setControlMode('FOLLOW'));
+            modeJoystickBtn.addEventListener('click', () => setControlMode('JOYSTICK'));
+            
+            prevSkinBtn.addEventListener('click', () => changeSkin(-1));
+            nextSkinBtn.addEventListener('click', () => changeSkin(1));
+            customSkinColor.addEventListener('input', updateSkinPreview);
+
+            prevMapBtn.addEventListener('click', () => changeMap(-1));
+            nextMapBtn.addEventListener('click', () => changeMap(1));
+
+            // Settings
+            settingsBtn.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+            closeSettingsBtn.addEventListener('click', () => settingsModal.classList.add('hidden'));
+            
+            musicToggle.addEventListener('click', () => {
+                settings.music = !settings.music;
+                updateSettingsUI();
+                toggleMusic(settings.music);
+            });
+
+            diffBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    settings.difficulty = parseInt(btn.dataset.diff);
+                    updateSettingsUI();
+                });
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (controlMode === 'FOLLOW') {
+                    mouse.x = e.clientX;
+                    mouse.y = e.clientY;
+                }
+            });
+            
+            window.addEventListener('touchmove', e => {
+                if (controlMode === 'FOLLOW') {
+                    e.preventDefault();
+                    mouse.x = e.touches[0].clientX;
+                    mouse.y = e.touches[0].clientY;
+                }
+            }, { passive: false });
+            
+            window.addEventListener('touchstart', e => {
+                if (controlMode === 'FOLLOW') {
+                    mouse.x = e.touches[0].clientX;
+                    mouse.y = e.touches[0].clientY;
+                }
+            }, { passive: false });
+
+            // Joystick
+            joystickBase.addEventListener('touchstart', handleJoystickStart, { passive: false });
+            joystickBase.addEventListener('touchmove', handleJoystickMove, { passive: false });
+            joystickBase.addEventListener('touchend', handleJoystickEnd, { passive: false });
+            
+            joystickBase.addEventListener('mousedown', handleJoystickStart);
+            document.addEventListener('mousemove', (e) => {
+                if(joystick.active) handleJoystickMove(e);
+            });
+            document.addEventListener('mouseup', handleJoystickEnd);
+
+            // Editor
+            canvas.addEventListener('click', handleEditorClick);
+            toolBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    toolBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedTool = btn.dataset.tool;
+                });
+            });
+        }
+
+        function setControlMode(mode) {
+            controlMode = mode;
+            if (mode === 'FOLLOW') {
+                modeFollowBtn.classList.add('ring-4', 'ring-yellow-400');
+                modeJoystickBtn.classList.remove('ring-4', 'ring-yellow-400');
+                joystickContainer.style.display = 'none';
+            } else {
+                modeJoystickBtn.classList.add('ring-4', 'ring-yellow-400');
+                modeFollowBtn.classList.remove('ring-4', 'ring-yellow-400');
+                // Only show joystick if playing
+                if(gameState === 'PLAYING' || gameState === 'PLAY_CUSTOM') joystickContainer.style.display = 'block';
+            }
+        }
+
+        function handleJoystickStart(e) {
+            e.preventDefault();
+            joystick.active = true;
+            handleJoystickMove(e);
+        }
+
+        function handleJoystickMove(e) {
+            if (!joystick.active) return;
+            e.preventDefault();
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = joystickBase.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = touch.clientX - centerX;
+            const dy = touch.clientY - centerY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = rect.width / 2;
+            const cappedDist = Math.min(dist, maxDist);
+            const angle = Math.atan2(dy, dx);
+            const knobX = Math.cos(angle) * cappedDist;
+            const knobY = Math.sin(angle) * cappedDist;
+            joystickKnob.style.transform = `translate(calc(-50% + ${knobX}px), calc(-50% + ${knobY}px))`;
+            joystick.dx = dx / maxDist;
+            joystick.dy = dy / maxDist;
+            const vecMag = Math.sqrt(joystick.dx**2 + joystick.dy**2);
+            if(vecMag > 1) { joystick.dx /= vecMag; joystick.dy /= vecMag; }
+        }
+
+        function handleJoystickEnd(e) {
+            joystick.active = false;
+            joystick.dx = 0;
+            joystick.dy = 0;
+            joystickKnob.style.transform = `translate(-50%, -50%)`;
+        }
+
+        // --- Audio Logic ---
+        function toggleMusic(enable) {
+            if (enable) {
+                if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioContext.state === 'suspended') audioContext.resume();
+                if (bgOscillators.length === 0) startAmbientMusic();
+            } else {
+                stopAmbientMusic();
+            }
+        }
+
+        function startAmbientMusic() {
+            if (!audioContext) return;
+            const now = audioContext.currentTime;
+            
+            // Low drone
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(50, now);
+            gain.gain.setValueAtTime(0.1, now);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start();
+            bgOscillators.push({osc, gain});
+
+            // High sparkle loop
+            const sparkle = audioContext.createOscillator();
+            const sparkleGain = audioContext.createGain();
+            sparkle.type = 'triangle';
+            sparkle.frequency.setValueAtTime(400, now);
+            sparkleGain.gain.setValueAtTime(0, now);
+            
+            // Automate
+            setInterval(() => {
+                if(!settings.music) return;
+                const t = audioContext.currentTime;
+                sparkle.frequency.setValueAtTime(200 + Math.random()*400, t);
+                sparkleGain.gain.cancelScheduledValues(t);
+                sparkleGain.gain.setValueAtTime(0, t);
+                sparkleGain.gain.linearRampToValueAtTime(0.05, t + 0.1);
+                sparkleGain.gain.linearRampToValueAtTime(0, t + 0.5);
+            }, 3000);
+
+            sparkle.connect(sparkleGain);
+            sparkleGain.connect(audioContext.destination);
+            sparkle.start();
+            bgOscillators.push({osc: sparkle, gain: sparkleGain});
+        }
+
+        function stopAmbientMusic() {
+            bgOscillators.forEach(o => {
+                try {
+                    o.osc.stop();
+                    o.osc.disconnect();
+                } catch(e) {}
+            });
+            bgOscillators = [];
+        }
+
+        function updateSettingsUI() {
+            // Music Toggle
+            const knob = musicToggle.querySelector('div');
+            if (settings.music) {
+                musicToggle.classList.remove('bg-red-500');
+                musicToggle.classList.add('bg-green-500');
+                knob.style.transform = 'translateX(1.5rem)';
+            } else {
+                musicToggle.classList.add('bg-red-500');
+                musicToggle.classList.remove('bg-green-500');
+                knob.style.transform = 'translateX(0)';
+            }
+
+            // Difficulty
+            diffBtns.forEach(btn => {
+                const diff = parseInt(btn.dataset.diff);
+                btn.classList.remove('bg-green-600', 'bg-yellow-600', 'bg-red-600', 'hover:bg-gray-700');
+                if (diff === settings.difficulty) {
+                    if(diff===0) btn.classList.add('bg-green-600');
+                    if(diff===1) btn.classList.add('bg-yellow-600');
+                    if(diff===2) btn.classList.add('bg-red-600');
+                } else {
+                    btn.classList.add('hover:bg-gray-700');
+                }
+            });
+        }
+        updateSettingsUI();
+
+        // --- Skins & Maps Logic ---
+        function changeSkin(dir) {
+            currentSkinIndex += dir;
+            if (currentSkinIndex < 0) currentSkinIndex = skins.length - 1;
+            if (currentSkinIndex >= skins.length) currentSkinIndex = 0;
+            updateSkinPreview();
+        }
+
+        function changeMap(dir) {
+            currentMapIndex += dir;
+            if (currentMapIndex < 0) currentMapIndex = maps.length - 1;
+            if (currentMapIndex >= maps.length) currentMapIndex = 0;
+            updateMapPreview();
+            generateDecorations();
+            updateBackground();
+        }
+
+        function updateBackground() {
+            const map = maps[currentMapIndex];
+            body.className = `h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative select-none transition-colors duration-1000`;
+            body.style.background = `linear-gradient(to bottom, ${map.bgStart}, ${map.bgEnd})`;
+        }
+
+        function updateMapPreview() {
+            const map = maps[currentMapIndex];
+            mapNameEl.innerText = map.name;
+            mapPreviewEl.style.background = `linear-gradient(to bottom right, ${map.bgStart}, ${map.bgEnd})`;
+        }
+
+        function updateSkinPreview() {
+            const skin = skins[currentSkinIndex];
+            const isLocked = highScore < skin.unlockScore;
+            skinNameEl.innerText = skin.name;
+            skinCtx.clearRect(0,0,80,80);
+            skinCtx.save();
+            skinCtx.translate(40, 40);
+            skinCtx.scale(1.2, 1.2);
+            if (isLocked) {
+                skinCtx.filter = 'grayscale(100%) brightness(50%)';
+                lockIcon.classList.remove('hidden');
+                skinUnlockEl.innerText = `${skin.unlockScore}`;
+                startBtn.classList.add('opacity-50', 'pointer-events-none');
+                customSkinColor.classList.add('hidden');
+            } else {
+                skinCtx.filter = 'none';
+                lockIcon.classList.add('hidden');
+                skinUnlockEl.innerText = '';
+                startBtn.classList.remove('opacity-50', 'pointer-events-none');
+                
+                if (skin.id === 'custom') {
+                    customSkinColor.classList.remove('hidden');
+                } else {
+                    customSkinColor.classList.add('hidden');
+                }
+            }
+            drawFishBody(skinCtx, 0, 0, 18, 0, skin);
+            skinCtx.restore();
+        }
+
+        function drawFishBody(c, x, y, r, angle, skin, isUnicorn = false) {
+            c.save();
+            c.translate(x, y);
+            if (Math.abs(angle) > Math.PI / 2) {
+                c.scale(1, -1);
+                c.rotate(angle);
+            } else {
+                c.rotate(angle);
+            }
+
+            // Colors
+            let bodyColor = skin.color1;
+            if (bodyColor === 'rainbow' || isUnicorn) {
+                bodyColor = `hsl(${Date.now() / 5 % 360}, 100%, 60%)`;
+            } else if (bodyColor === 'custom') {
+                bodyColor = customSkinColor.value;
+            }
+
+            // Body
+            c.beginPath();
+            c.ellipse(0, 0, r * 1.5, r, 0, 0, Math.PI * 2);
+            c.fillStyle = bodyColor;
+            c.fill();
+            c.lineWidth = 1.5;
+            c.strokeStyle = 'rgba(0,0,0,0.2)';
+            c.stroke();
+
+            // Unicorn Horn
+            if(isUnicorn) {
+                c.save();
+                c.translate(r * 0.8, -r * 0.8);
+                c.rotate(-Math.PI / 4);
+                c.beginPath();
+                c.moveTo(0, 0);
+                c.lineTo(r * 0.3, r);
+                c.lineTo(-r * 0.3, r);
+                c.closePath();
+                c.fillStyle = `hsl(${Date.now() / 2 % 360}, 100%, 80%)`;
+                c.fill();
+                c.restore();
+            }
+
+            // Stripes/Pattern
+            c.fillStyle = skin.color2;
+            if (skin.id === 'nemo' || skin.id === 'rainbow' || skin.id === 'void') {
+                c.beginPath();
+                c.rect(-r * 0.3, -r + 2, r * 0.4, (r * 2) - 4);
+                c.rect(r * 0.5, -r * 0.8, r * 0.3, (r * 1.6));
+                c.fill();
+            } else if (skin.id === 'dory') {
+                 c.beginPath();
+                 c.ellipse(-r*0.2, -r*0.3, r*0.8, r*0.4, 0, 0, Math.PI*2);
+                 c.fill();
+            }
+
+            // Tail
+            c.beginPath();
+            c.moveTo(-r * 1.4, 0);
+            c.lineTo(-r * 2.2, -r * 0.8);
+            c.lineTo(-r * 2.2, r * 0.8);
+            c.closePath();
+            c.fillStyle = bodyColor;
+            c.fill();
+            c.stroke();
+
+            // Eye
+            c.fillStyle = 'white';
+            c.beginPath();
+            c.arc(r * 0.8, -r * 0.3, r * 0.3, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = 'black';
+            c.beginPath();
+            c.arc(r * 0.9, -r * 0.3, r * 0.12, 0, Math.PI * 2);
+            c.fill();
+
+            // Fin
+            c.beginPath();
+            c.moveTo(0, 0);
+            c.quadraticCurveTo(-r*0.5, r, 0, r);
+            c.fillStyle = skin.detail; 
+            c.fill();
+            c.stroke();
+
+            c.restore();
+        }
+
+        // --- Player ---
+        const player = {
+            x: 0, y: 0,
+            baseRadius: 15,
+            radius: 15,
+            angle: 0,
+            speed: 5,
+            
+            // Boosters
+            unicornTime: 0,
+            growthTime: 0,
+
+            reset: function() {
+                if(gameState === 'PLAY_CUSTOM') {
+                    this.x = customLevel.start.x;
+                    this.y = customLevel.start.y;
+                } else {
+                    this.x = width / 2;
+                    this.y = height / 2;
+                }
+                this.baseRadius = 15;
+                this.radius = 15;
+                this.unicornTime = 0;
+                this.growthTime = 0;
+                mouse.x = this.x;
+                mouse.y = this.y;
+                joystick.dx = 0;
+                joystick.dy = 0;
+            },
+
+            update: function(dt) {
+                // Handle Boosters
+                let sizeMult = 1;
+                
+                if (this.growthTime > 0) {
+                    this.growthTime -= dt;
+                    sizeMult = 2;
+                }
+                
+                if (this.unicornTime > 0) {
+                    this.unicornTime -= dt;
+                }
+
+                this.radius = this.baseRadius * sizeMult;
+
+                // Movement
+                let dx, dy;
+                if (controlMode === 'FOLLOW') {
+                    dx = mouse.x - this.x;
+                    dy = mouse.y - this.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    this.angle = Math.atan2(dy, dx);
+                    if (dist > 1) {
+                        this.x += dx * 0.08;
+                        this.y += dy * 0.08;
+                    }
+                } else {
+                    if (Math.abs(joystick.dx) > 0.01 || Math.abs(joystick.dy) > 0.01) {
+                        this.angle = Math.atan2(joystick.dy, joystick.dx);
+                        const speed = this.speed * (1 + (this.baseRadius / 100));
+                        this.x += joystick.dx * speed;
+                        this.y += joystick.dy * speed;
+                    }
+                }
+
+                // Bounds
+                this.x = Math.max(this.radius, Math.min(width - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(height - this.radius, this.y));
+            },
+
+            draw: function() {
+                drawFishBody(ctx, this.x, this.y, this.radius, this.angle, skins[currentSkinIndex], this.unicornTime > 0);
+                
+                // Draw invincibility shield aura
+                if (this.unicornTime > 0) {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 2, 0, Math.PI * 2);
+                    ctx.strokeStyle = `hsla(${Date.now() % 360}, 100%, 50%, 0.5)`;
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        };
+
+        // --- Entities ---
+        const enemies = [];
+        const bombs = [];
+        const sharks = [];
+        const boosters = [];
+
+        function spawnEnemy() {
+            const side = Math.random() < 0.5 ? 'left' : 'right';
+            const y = Math.random() * (height - 100) + 50;
+            
+            // Balanced sizing to be fairer
+            let sizeFactor;
+            const r = Math.random();
+            if (r < 0.6) {
+                 sizeFactor = Math.random() * 0.9; // Smaller (0 - 0.9x)
+            } else if (r < 0.95) {
+                 sizeFactor = 0.9 + Math.random() * 0.4; // Slightly bigger (0.9 - 1.3x)
+            } else {
+                 sizeFactor = 1.3 + Math.random() * 0.2; // Max 1.5x bigger
+            }
+
+            let enemyRadius = player.baseRadius * sizeFactor;
+            if (enemyRadius < 8) enemyRadius = 8;
+            if (enemyRadius > 150) enemyRadius = 150;
+            
+            let difficultyMod = 1;
+            if (settings.difficulty === 0) difficultyMod = 0.7;
+            if (settings.difficulty === 2) difficultyMod = 1.3;
+
+            const speed = (Math.random() * 2 + 1) * (1 + score / 2000) * difficultyMod;
+
+            enemies.push({
+                x: side === 'left' ? -enemyRadius * 2 : width + enemyRadius * 2,
+                y: y,
+                radius: enemyRadius,
+                speed: side === 'left' ? speed : -speed,
+                hue: Math.random() * 360
+            });
+        }
+
+        function spawnShark() {
+            if (score < 500) return; // No sharks too early
+            const side = Math.random() < 0.5 ? 'left' : 'right';
+            const y = Math.random() * (height - 200) + 100;
+            const r = Math.max(60, player.baseRadius * 3); // Huge
+            
+            // Show warning
+            warningLayer.classList.remove('hidden');
+            warningLayer.style.left = side === 'left' ? '10%' : 'auto';
+            warningLayer.style.right = side === 'right' ? '10%' : 'auto';
+            
+            setTimeout(() => {
+                warningLayer.classList.add('hidden');
+                sharks.push({
+                    x: side === 'left' ? -r * 3 : width + r * 3,
+                    y: y,
+                    radius: r,
+                    speed: side === 'left' ? 12 : -12,
+                    active: true
+                });
+            }, 1500);
+        }
+
+        function spawnBomb() {
+            const side = Math.random() < 0.5 ? 'left' : 'right';
+            const y = Math.random() * (height - 40) + 20;
+            const radius = 25;
+            const speed = (Math.random() * 1.5 + 0.5) + (score/3000);
+
+            bombs.push({
+                x: side === 'left' ? -50 : width + 50,
+                y: y,
+                radius: radius,
+                speed: side === 'left' ? speed : -speed,
+                angle: 0
+            });
+        }
+
+        function spawnBooster() {
+            const type = Math.random() < 0.6 ? 'growth' : 'unicorn';
+            const x = Math.random() * (width - 100) + 50;
+            boosters.push({
+                x: x,
+                y: -50,
+                type: type,
+                radius: 20,
+                speed: 2,
+                angle: 0
+            });
+        }
+
+        function drawEnemy(e) {
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            if (e.speed < 0) ctx.scale(-1, 1);
+
+            ctx.fillStyle = `hsl(${e.hue}, 70%, 50%)`;
+            ctx.strokeStyle = `hsl(${e.hue}, 70%, 30%)`;
+            ctx.lineWidth = 1.5;
+            
+            ctx.beginPath();
+            ctx.ellipse(0, 0, e.radius * 1.4, e.radius, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(-e.radius * 1.2, 0);
+            ctx.lineTo(-e.radius * 2, -e.radius * 0.7);
+            ctx.lineTo(-e.radius * 2, e.radius * 0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Eye
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(e.radius * 0.6, -e.radius * 0.3, e.radius * 0.25, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(e.radius * 0.7, -e.radius * 0.3, e.radius * 0.1, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawShark(s) {
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            if (s.speed < 0) ctx.scale(-1, 1);
+
+            // Grey body
+            ctx.fillStyle = '#4b5563';
+            ctx.strokeStyle = '#1f2937';
+            ctx.lineWidth = 3;
+
+            // Body
+            ctx.beginPath();
+            ctx.ellipse(0, 0, s.radius * 2, s.radius * 0.8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Dorsal Fin
+            ctx.beginPath();
+            ctx.moveTo(0, -s.radius * 0.6);
+            ctx.lineTo(s.radius * 0.4, -s.radius * 1.6);
+            ctx.lineTo(s.radius * 0.8, -s.radius * 0.4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(-s.radius * 1.8, 0);
+            ctx.lineTo(-s.radius * 3, -s.radius * 1.2);
+            ctx.lineTo(-s.radius * 3, s.radius * 1.2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Eye & Teeth
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(s.radius * 1.2, -s.radius * 0.2, s.radius * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(s.radius * 1.25, -s.radius * 0.2, s.radius * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Teeth
+            ctx.beginPath();
+            ctx.moveTo(s.radius, s.radius * 0.4);
+            ctx.lineTo(s.radius * 1.8, s.radius * 0.4);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawBomb(b) {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            b.angle += 0.05;
+            ctx.rotate(b.angle);
+
+            ctx.fillStyle = '#1F2937';
+            ctx.beginPath();
+            ctx.arc(0, 0, b.radius, 0, Math.PI*2);
+            ctx.fill();
+            
+            for(let i=0; i<8; i++) {
+                ctx.rotate(Math.PI/4);
+                ctx.fillStyle = '#1F2937';
+                ctx.beginPath();
+                ctx.moveTo(b.radius, -5);
+                ctx.lineTo(b.radius + 8, 0);
+                ctx.lineTo(b.radius, 5);
+                ctx.fill();
+            }
+            
+            ctx.fillStyle = 'red';
+            ctx.font = `900 ${Math.floor(b.radius)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('!', 0, 2);
+
+            ctx.restore();
+        }
+
+        function drawBooster(b) {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+            // Bobbing
+            ctx.translate(0, Math.sin(Date.now() * 0.005) * 5);
+            
+            if (b.type === 'growth') {
+                ctx.fillStyle = '#4ade80'; // Green
+                ctx.beginPath();
+                ctx.arc(0, 0, b.radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 20px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('2x', 0, 1);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = '#d8b4fe'; // Purple
+                ctx.beginPath();
+                ctx.arc(0, 0, b.radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.font = '20px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🦄', 0, 2);
+                ctx.strokeStyle = `hsl(${Date.now() % 360}, 100%, 50%)`;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function checkCollision(c1, c2) {
+            const dx = c1.x - c2.x;
+            const dy = c1.y - c2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist < (c1.radius * 0.8 + c2.radius * 0.8);
+        }
+
+        function updateProgress() {
+            // Find current level range
+            let currentLevel = sizeLevels[0];
+            let nextLevel = sizeLevels[1];
+            let levelIndex = 0;
+
+            for(let i=0; i<sizeLevels.length-1; i++) {
+                if (player.baseRadius >= sizeLevels[i].r) {
+                    currentLevel = sizeLevels[i];
+                    nextLevel = sizeLevels[i+1];
+                    levelIndex = i;
+                }
+            }
+
+            // Update Text
+            sizeDisplay.innerText = currentLevel.label;
+            
+            // Update Bar
+            const range = nextLevel.r - currentLevel.r;
+            const progress = player.baseRadius - currentLevel.r;
+            const pct = Math.min(100, Math.max(0, (progress / range) * 100));
+            
+            progressBar.style.width = `${pct}%`;
+            
+            // Text color
+            const colors = ["text-green-300", "text-yellow-300", "text-orange-300", "text-red-300", "text-purple-300", "text-purple-500", "text-pink-500"];
+            sizeDisplay.className = `font-bold ${colors[Math.min(levelIndex, colors.length-1)]}`;
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            finalScoreDisplay.innerText = score;
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('nemoHighScore', highScore);
+            }
+            finalBestScoreDisplay.innerText = highScore;
+            bestScoreDisplay.innerText = highScore;
+
+            gameOverScreen.classList.remove('hidden');
+            if(controlMode === 'JOYSTICK') joystickContainer.style.display = 'none';
+        }
+
+        function updateUI() {
+            scoreDisplay.innerText = score;
+
+            // Unicorn Text
+            if(player.unicornTime > 0) {
+                unicornText.classList.remove('hidden');
+                body.classList.add('unicorn-mode');
+            } else {
+                unicornText.classList.add('hidden');
+                body.classList.remove('unicorn-mode');
+            }
+
+            // Boosters HUD
+            let html = '';
+            if (player.growthTime > 0) {
+                 html += `<div class="bg-green-500 text-white px-2 py-1 rounded shadow booster-timer">2X: ${(player.growthTime/1000).toFixed(1)}s</div>`;
+            }
+            if (player.unicornTime > 0) {
+                 html += `<div class="bg-purple-500 text-white px-2 py-1 rounded shadow booster-timer">🦄: ${(player.unicornTime/1000).toFixed(1)}s</div>`;
+            }
+            boostersContainer.innerHTML = html;
+        }
+
+        // --- Editor Logic ---
+        function handleEditorClick(e) {
+            if (gameState !== 'EDITOR') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Simple storage save
+            const save = () => localStorage.setItem('nemoCustomLevel', JSON.stringify(customLevel));
+
+            if (selectedTool === 'eraser') {
+                // Find item to remove
+                const allLists = [customLevel.decorations, customLevel.enemies, customLevel.bombs, customLevel.sharks, customLevel.boosters];
+                allLists.forEach(list => {
+                    for(let i=list.length-1; i>=0; i--) {
+                        let item = list[i];
+                        let r = item.radius || item.size || 20;
+                        let dist = Math.sqrt((x-item.x)**2 + (y-item.y)**2);
+                        if (dist < r + 10) {
+                            list.splice(i, 1);
+                            save();
+                            return;
+                        }
+                    }
+                });
+                return;
+            }
+
+            if (selectedTool === 'start') {
+                customLevel.start = { x, y };
+            } else if (selectedTool === 'rock') {
+                customLevel.decorations.push({ type: 'rock', x, y, w: 40, h: 30, color: maps[currentMapIndex].rock });
+            } else if (selectedTool === 'coral') {
+                customLevel.decorations.push({ type: 'coral', x, y, size: 35, branches: 4, color: 'pink' });
+            } else if (selectedTool === 'seaweed') {
+                customLevel.decorations.push({ type: 'seaweed', x, y, height: 100, width: 15, segments: 6, color: 'green', offset: 0 });
+            } else if (selectedTool === 'enemy_s') {
+                // FIXED: Radius reduced to 10 so it's smaller than player start (15)
+                customLevel.enemies.push({ x, y, radius: 10, speed: 2, hue: Math.random()*360 });
+            } else if (selectedTool === 'enemy_m') {
+                customLevel.enemies.push({ x, y, radius: 30, speed: 2, hue: Math.random()*360 });
+            } else if (selectedTool === 'enemy_l') {
+                customLevel.enemies.push({ x, y, radius: 60, speed: 1.5, hue: Math.random()*360 });
+            } else if (selectedTool === 'shark') {
+                customLevel.sharks.push({ x, y, radius: 70, speed: 3, active: true });
+            } else if (selectedTool === 'bomb') {
+                customLevel.bombs.push({ x, y, radius: 25, speed: 1, angle: 0 });
+            } else if (selectedTool === 'boost_grow') {
+                customLevel.boosters.push({ x, y, radius: 20, type: 'growth', speed: 0 });
+            } else if (selectedTool === 'boost_uni') {
+                customLevel.boosters.push({ x, y, radius: 20, type: 'unicorn', speed: 0 });
+            }
+            save();
+        }
+
+        function drawEditor() {
+            ctx.clearRect(0,0,width,height);
+            
+            // Draw decorations from map logic to see bg
+            drawDecorations([], 0);
+
+            // Draw Custom Decorations
+            drawDecorations(customLevel.decorations, Date.now());
+
+            // Draw Player Start
+            ctx.fillStyle = 'rgba(0, 100, 255, 0.5)';
+            ctx.beginPath();
+            ctx.arc(customLevel.start.x, customLevel.start.y, 15, 0, Math.PI*2);
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('START', customLevel.start.x, customLevel.start.y - 20);
+
+            // Draw Custom Entities Static
+            customLevel.enemies.forEach(e => {
+                drawEnemy(e);
+                // Direction Arrow
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y);
+                ctx.lineTo(e.x + 30, e.y); // Default right
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+            customLevel.sharks.forEach(s => drawShark(s));
+            customLevel.bombs.forEach(b => drawBomb(b));
+            customLevel.boosters.forEach(b => drawBooster(b));
+        }
+
+        function openConstructor() {
+            gameState = 'EDITOR';
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            editorUI.classList.remove('hidden');
+            editorUI.classList.add('flex');
+            editorGrid.classList.remove('hidden');
+            // Stop background particles
+            document.getElementById('bubbles').style.display = 'none';
+            
+            // Load custom map decor
+            customLevel = JSON.parse(localStorage.getItem('nemoCustomLevel')) || customLevel;
+            
+            // Start render loop for editor
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function closeConstructor() {
+            gameState = 'START';
+            editorUI.classList.add('hidden');
+            editorUI.classList.remove('flex');
+            editorGrid.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+             document.getElementById('bubbles').style.display = 'block';
+            resize(); // Regen main menu bg
+        }
+
+        function playCustomLevel() {
+            gameState = 'PLAY_CUSTOM';
+            editorUI.classList.add('hidden');
+            editorUI.classList.remove('flex');
+            editorGrid.classList.add('hidden');
+            
+            score = 0;
+            scoreDisplay.innerText = '0';
+            player.reset(); // Uses custom start
+
+            // Deep copy items to game arrays
+            enemies.length = 0;
+            sharks.length = 0;
+            bombs.length = 0;
+            boosters.length = 0;
+            
+            // Clone objects so we don't modify the editor data directly
+            customLevel.enemies.forEach(e => enemies.push({...e, speed: e.speed * (e.x < width/2 ? 1 : -1)})); // Auto direction
+            customLevel.sharks.forEach(s => sharks.push({...s, speed: s.speed * (s.x < width/2 ? 1 : -1)}));
+            customLevel.bombs.forEach(b => bombs.push({...b, speed: b.speed * (b.x < width/2 ? 1 : -1)}));
+            customLevel.boosters.forEach(b => boosters.push({...b}));
+            
+            // For custom play, we use custom decorations
+            decorations = [...customLevel.decorations];
+            
+            if (controlMode === 'JOYSTICK') {
+                joystickContainer.style.display = 'block';
+            }
+
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop(timestamp) {
+            if (gameState === 'EDITOR') {
+                drawEditor();
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            if (gameState !== 'PLAYING' && gameState !== 'PLAY_CUSTOM') return;
+
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            gameTime += dt;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw correct decor list
+            drawDecorations(decorations, gameTime);
+
+            // Spawning (Only in Normal Mode)
+            if (gameState === 'PLAYING') {
+                let spawnRate = 0.02;
+                if (settings.difficulty === 0) spawnRate = 0.012;
+                if (settings.difficulty === 2) spawnRate = 0.03;
+
+                if (Math.random() < spawnRate) spawnEnemy();
+                if (Math.random() < 0.00015 + (score * 0.000001)) spawnBomb(); // Rare bombs
+                if (Math.random() < 0.0002) spawnShark(); // Rare sharks
+                if (Math.random() < 0.001) spawnBooster(); // Boosters
+            }
+
+            // Player
+            player.update(dt);
+            player.draw();
+            updateProgress();
+            updateUI();
+
+            // Enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.x += e.speed;
+                drawEnemy(e);
+
+                if (checkCollision(player, e)) {
+                    if (player.unicornTime > 0 || player.radius > e.radius) {
+                        score += Math.floor(e.radius);
+                        player.baseRadius += e.radius * 0.05; 
+                        enemies.splice(i, 1);
+                    } else {
+                        gameOver();
+                    }
+                } else {
+                     // In custom mode, maybe they loop? or bounce? let's make them loop
+                     if(gameState === 'PLAY_CUSTOM') {
+                         if(e.speed > 0 && e.x > width + 100) e.x = -100;
+                         if(e.speed < 0 && e.x < -100) e.x = width + 100;
+                     } else {
+                         if ((e.speed > 0 && e.x > width + e.radius * 2) || (e.speed < 0 && e.x < -e.radius * 2)) {
+                            enemies.splice(i, 1);
+                        }
+                     }
+                }
+            }
+
+            // Sharks
+            for (let i = sharks.length - 1; i >= 0; i--) {
+                let s = sharks[i];
+                s.x += s.speed;
+                drawShark(s);
+
+                if (checkCollision(player, s)) {
+                    if (player.unicornTime > 0) {
+                        score += 500;
+                        sharks.splice(i, 1);
+                    } else {
+                        gameOver();
+                    }
+                }
+                 if(gameState === 'PLAY_CUSTOM') {
+                     if(s.speed > 0 && s.x > width + 200) s.x = -200;
+                     if(s.speed < 0 && s.x < -200) s.x = width + 200;
+                 } else {
+                    if ((s.speed > 0 && s.x > width + s.radius * 4) || (s.speed < 0 && s.x < -s.radius * 4)) {
+                        sharks.splice(i, 1);
+                    }
+                 }
+            }
+
+            // Bombs
+            for (let i = bombs.length - 1; i >= 0; i--) {
+                let b = bombs[i];
+                b.x += b.speed;
+                b.y += Math.sin(b.x * 0.02) * 1;
+                drawBomb(b);
+
+                if (checkCollision(player, b)) {
+                    if (player.unicornTime > 0) {
+                        score += 50;
+                        bombs.splice(i, 1);
+                    } else {
+                        gameOver();
+                    }
+                }
+
+                if(gameState === 'PLAY_CUSTOM') {
+                     if(b.speed > 0 && b.x > width + 100) b.x = -100;
+                     if(b.speed < 0 && b.x < -100) b.x = width + 100;
+                 } else {
+                    if ((b.speed > 0 && b.x > width + 100) || (b.speed < 0 && b.x < -100)) {
+                        bombs.splice(i, 1);
+                    }
+                 }
+            }
+
+            // Boosters
+            for (let i = boosters.length - 1; i >= 0; i--) {
+                let b = boosters[i];
+                if(gameState === 'PLAYING') b.y += b.speed; // Fall in normal mode
+                // In custom mode they just float/bob
+                
+                drawBooster(b);
+
+                if (checkCollision(player, b)) {
+                    if (b.type === 'growth') player.growthTime = 10000;
+                    if (b.type === 'unicorn') player.unicornTime = 5000;
+                    boosters.splice(i, 1);
+                }
+
+                if(gameState === 'PLAYING') {
+                    if (b.y > height + 50) boosters.splice(i, 1);
+                }
+            }
+
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            score = 0;
+            scoreDisplay.innerText = '0';
+            enemies.length = 0;
+            bombs.length = 0;
+            sharks.length = 0;
+            boosters.length = 0;
+            player.reset();
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            if (controlMode === 'JOYSTICK') {
+                joystickContainer.style.display = 'block';
+            }
+            
+            generateDecorations(); // Normal random generation
+
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function createBackgroundBubbles() {
+            const container = document.getElementById('bubbles');
+            container.innerHTML = '';
+            
+            const styleSheet = document.createElement("style");
+            styleSheet.innerText = `
+                @keyframes float {
+                    0% { transform: translateY(0); opacity: 0; }
+                    10% { opacity: 0.5; }
+                    100% { transform: translateY(-110vh); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(styleSheet);
+            
+            for(let i=0; i<20; i++) {
+                const b = document.createElement('div');
+                const size = Math.random() * 20 + 5;
+                b.style.width = `${size}px`;
+                b.style.height = `${size}px`;
+                b.style.position = 'absolute';
+                b.style.left = `${Math.random() * 100}%`;
+                b.style.bottom = `-${size}px`;
+                b.style.background = 'rgba(255,255,255,0.2)';
+                b.style.borderRadius = '50%';
+                b.style.animation = `float ${Math.random() * 5 + 5}s linear infinite`;
+                b.style.animationDelay = `${Math.random() * 5}s`;
+                container.appendChild(b);
+            }
+        }
+
+        // Fullscreen Logic
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(err);
+                });
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+            }
+        });
+
+        // Init
+        resize();
+        setupControls();
+        createBackgroundBubbles();
+        updateBackground();
+        updateSkinPreview();
+        updateMapPreview();
+        generateDecorations();
+
+        // Audio Context Unlock on user interaction
+        document.addEventListener('click', () => {
+            if (settings.music && !audioContext) {
+                 toggleMusic(true);
+            }
+        }, {once: true});
+
+        startBtn.addEventListener('click', startGame);
+        constructorBtn.addEventListener('click', openConstructor);
+        
+        editorClearBtn.addEventListener('click', () => {
+            if(confirm('Очистить всю карту?')) {
+                customLevel.decorations = [];
+                customLevel.enemies = [];
+                customLevel.sharks = [];
+                customLevel.bombs = [];
+                customLevel.boosters = [];
+                localStorage.setItem('nemoCustomLevel', JSON.stringify(customLevel));
+            }
+        });
+        editorExitBtn.addEventListener('click', closeConstructor);
+        editorPlayBtn.addEventListener('click', playCustomLevel);
+        
+        restartBtn.addEventListener('click', startGame);
+        menuBtn.addEventListener('click', () => {
+             gameOverScreen.classList.add('hidden');
+             startScreen.classList.remove('hidden');
+             gameState = 'START';
+             resize();
+        });
+
+        function previewLoop() {
+            if(gameState === 'START') {}
+            requestAnimationFrame(previewLoop);
+        }
+        previewLoop();
+
+    </script>
+</body>
+</html>
